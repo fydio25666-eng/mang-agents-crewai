@@ -1,0 +1,40 @@
+services:
+  - type: web
+    name: mang-agents-crewai
+    runtime: python
+    plan: starter
+    buildCommand: pip install .
+    startCommand: uvicorn web.server:app --host 0.0.0.0 --port $PORT --workers 1
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: QIANWEN_API_KEY
+        sync: false
+      - key: DEEPSEEK_API_KEY
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: QIANWEN_MODEL
+        value: qwen3.8-flash
+      - key: QIANWEN_BASE_URL
+        value: https://dashscope.aliyuncs.com/compatible-mode/v1
+      - key: DEEPSEEK_MODEL
+        value: deepseek-flash
+      - key: DEEPSEEK_BASE_URL
+        value: https://api.deepseek.com
+      - key: OPENAI_MODEL
+        value: gpt-5.5
+      - key: OPENAI_BASE_URL
+        value: https://newapi.dragon3api.com
+      - key: DEBATE_DB_PATH
+        value: /var/data/debates.sqlite3
+      - key: CREWAI_DATA_PATH
+        value: /var/data/crewai
+      - key: DEBATE_REQUEST_TIMEOUT
+        value: "60"
+      - key: DEBATE_MAX_OUTPUT_CHARS
+        value: "12000"
+    disk:
+      name: debate-data
+      mountPath: /var/data
+      sizeGB: 1

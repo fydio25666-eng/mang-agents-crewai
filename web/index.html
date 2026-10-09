@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>观点竞技场</title>
+  <style>
+    :root { --ink:#19231d; --muted:#6d796f; --line:#dce3dc; --paper:#fff; --bg:#f5f7f2; --pro:#c77442; --con:#4c7690; --accent:#bd872d; }
+    * { box-sizing:border-box; } body { margin:0; background:var(--bg); color:var(--ink); font:15px/1.65 "Segoe UI", "Microsoft YaHei", sans-serif; }
+    .shell { max-width:1120px; margin:0 auto; padding:38px 22px 70px; }
+    header { display:flex; justify-content:space-between; gap:24px; align-items:end; margin-bottom:28px; }
+    h1 { margin:0; font-size:clamp(30px,5vw,48px); line-height:1.1; letter-spacing:0; } .tagline { color:var(--muted); margin:8px 0 0; }
+    .badge { color:#7e5c1d; background:#fff5dc; border:1px solid #efd8a3; padding:6px 10px; border-radius:20px; white-space:nowrap; }
+    .panel { background:var(--paper); border:1px solid var(--line); border-radius:8px; padding:22px; box-shadow:0 8px 25px #24331a0a; }
+    .form-grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; } label { display:block; font-weight:700; margin-bottom:6px; } .full { grid-column:1/-1; }
+    input, textarea, select { width:100%; border:1px solid #ccd6cd; border-radius:5px; padding:11px 12px; font:inherit; color:var(--ink); background:#fbfcfa; } textarea { min-height:92px; resize:vertical; }
+    .actions { display:flex; align-items:center; gap:10px; margin-top:18px; } button { cursor:pointer; border:0; border-radius:5px; padding:10px 17px; font:700 14px inherit; } .primary { color:#fff; background:var(--ink); } .secondary { color:var(--ink); background:#e8eee8; } button:disabled { cursor:not-allowed; opacity:.48; }
+    #status { color:var(--muted); min-height:25px; } .arena { margin-top:25px; display:none; } .arena.visible { display:block; }
+    .arena-head { display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid var(--line); padding-bottom:12px; margin-bottom:16px; } h2 { margin:0; font-size:22px; }
+    .round { border:1px solid var(--line); border-radius:7px; overflow:hidden; margin:14px 0; background:#fff; } .round-title { background:#f7f9f6; padding:8px 13px; font-weight:700; color:var(--muted); }
+    .speakers { display:grid; grid-template-columns:1fr 1fr; } .speech { padding:15px; min-height:120px; } .speech + .speech { border-left:1px solid var(--line); } .speaker { font-weight:800; margin-bottom:5px; } .pro .speaker { color:var(--pro); } .con .speaker { color:var(--con); } .waiting { color:#9aa49b; font-style:italic; }
+    .judgment { border-left:4px solid var(--accent); background:#fffaf0; padding:17px 18px; margin-top:22px; } .judgment h3 { margin:0 0 7px; }
+    .error { color:#a33d2f; background:#fff1ef; padding:10px 12px; border-radius:5px; margin-top:14px; display:none; } .footer-note { color:var(--muted); text-align:center; margin-top:35px; font-size:13px; }
+    @media (max-width:720px) { header { display:block; } .badge { display:inline-block; margin-top:15px; } .form-grid, .speakers { grid-template-columns:1fr; } .full { grid-column:auto; } .speech + .speech { border-left:0; border-top:1px solid var(--line); } .actions { flex-wrap:wrap; } }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <header><div><h1>观点竞技场</h1><p class="tagline">千问主张，DeepSeek 质询，OpenAI 作出最终裁决。</p></div><div class="badge">最多 12 轮 · 24 条发言</div></header>
+    <section class="panel">
+      <form id="debate-form"><div class="form-grid">
+        <div><label for="topic">辩题</label><input id="topic" maxlength="2000" required placeholder="例如：远程办公"></div>
+        <div><label for="rounds">辩论轮数</label><select id="rounds"><option>3</option><option selected>4</option><option>6</option><option>8</option><option>12</option></select></div>
+        <div class="full"><label for="question">要讨论的问题</label><textarea id="question" maxlength="4000" required placeholder="例如：企业是否应该优先采用远程办公？"></textarea></div>
+        <div class="full"><label for="context">补充背景 <span style="font-weight:400;color:var(--muted)">(可选)</span></label><textarea id="context" maxlength="6000" placeholder="可以补充行业、受众或判断标准。"></textarea></div>
+      </div><div class="actions"><button class="primary" id="start" type="submit">开始辩论</button><button class="secondary" id="pause" type="button" disabled>暂停辩论</button><span id="status">等待输入一个值得争论的问题。</span></div><div class="error" id="error"></div></form>
+    </section>
+    <section class="arena" id="arena"><div class="arena-head"><h2>实时辩论实录</h2><span id="round-count" class="badge">准备中</span></div><div id="transcript"></div><div class="judgment" id="judgment" hidden><h3 id="winner"></h3><div id="scores"></div><p id="summary"></p><p id="reasoning"></p></div></section>
+    <p class="footer-note">每轮开始时立即显示生成状态，发言完成后逐字呈现。</p>
+  </main>
+  <script>
+    const form = document.querySelector('#debate-form'), start = document.querySelector('#start'), pause = document.querySelector('#pause');
+    const statusEl = document.querySelector('#status'), errorEl = document.querySelector('#error'), arena = document.querySelector('#arena'), transcript = document.querySelector('#transcript'), roundCount = document.querySelector('#round-count'), judgment = document.querySelector('#judgment');
+    let debateId = null, paused = false, rounds = {}, typingQueue = Promise.resolve();
+    const labels = { pro: '正方 · QIANWEN', con: '反方 · DEEPSEEK' };
+    function showError(message) { errorEl.textContent = message; errorEl.style.display = 'block'; }
+    function setStatus(message) { statusEl.textContent = message; }
+    function createRound(round) { const el = document.createElement('article'); el.className='round'; el.innerHTML=`<div class="round-title">第 ${round} 轮</div><div class="speakers"><div class="speech pro"><div class="speaker">${labels.pro}</div><div class="body waiting">等待发言…</div></div><div class="speech con"><div class="speaker">${labels.con}</div><div class="body waiting">等待发言…</div></div></div>`; transcript.appendChild(el); rounds[round]=el; return el; }
+    function showRoundStatus(value) { const [, roundText, side] = value.split(':'); const round=Number(roundText); const el=rounds[round] || createRound(round); const body=el.querySelector(`.${side} .body`); if(body.classList.contains('waiting')) body.textContent='正在组织观点…'; roundCount.textContent=`第 ${round} 轮 · ${round} / ${document.querySelector('#rounds').value}`; setStatus(`${labels[side]} 正在进行第 ${round} 轮发言…`); el.scrollIntoView({behavior:'smooth',block:'nearest'}); }
+    const delay = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds));
+    async function typeMessage(message) { const round = rounds[message.round_number] || createRound(message.round_number); const body=round.querySelector(`.${message.side} .body`); body.className='body'; body.textContent=''; roundCount.textContent=`第 ${message.round_number} 轮 · ${Object.keys(rounds).length} / ${document.querySelector('#rounds').value}`; for(const character of message.content) { while(paused) await delay(60); body.textContent += character; await delay(18); } }
+    function addMessage(message) { typingQueue = typingQueue.then(() => typeMessage(message)); return typingQueue; }
+    function handleEvent(type, payload) { if(type==='message') addMessage(payload); if(type==='status') { if(payload.status.startsWith('round:')) showRoundStatus(payload.status); else { const names={paused:'已暂停，当前发言完成后停在这里',running:'辩论继续进行…',judging:'双方发言结束，裁判正在评审…'}; setStatus(names[payload.status]||payload.status); } } if(type==='judgment') { typingQueue.then(()=>{ judgment.hidden=false; const names={pro:'正方胜出',con:'反方胜出'}; document.querySelector('#winner').textContent=names[payload.winner]; document.querySelector('#scores').textContent=`正方 ${payload.pro_score} 分 · 反方 ${payload.con_score} 分`; document.querySelector('#summary').textContent=payload.final_summary; document.querySelector('#reasoning').textContent=payload.reasoning; }); } if(type==='error') showError(payload.message); if(type==='done') { typingQueue.then(()=>{ start.disabled=false; pause.disabled=true; pause.textContent='暂停辩论'; setStatus(document.querySelector('#judgment').hidden ? '辩论已停止' : '辩论完成，裁判已给出结论。'); }); } }
+    async function stream() { const response=await fetch(`/api/debates/${debateId}/stream`); if(!response.ok) throw new Error('无法连接到辩论流'); const reader=response.body.getReader(), decoder=new TextDecoder(); let buffer=''; while(true) { const {value,done}=await reader.read(); if(done) break; buffer+=decoder.decode(value,{stream:true}); const chunks=buffer.split('\n\n'); buffer=chunks.pop(); for(const chunk of chunks) { const line=chunk.split('\n').find(x=>x.startsWith('data:')); const event=chunk.split('\n').find(x=>x.startsWith('event:')); if(line&&event) handleEvent(event.slice(6).trim(),JSON.parse(line.slice(5))); } } }
+    form.addEventListener('submit', async event => { event.preventDefault(); errorEl.style.display='none'; transcript.innerHTML=''; judgment.hidden=true; rounds={}; typingQueue=Promise.resolve(); arena.classList.add('visible'); start.disabled=true; pause.disabled=false; paused=false; pause.textContent='暂停辩论'; setStatus('正在连接双方…'); try { const response=await fetch('/api/debates',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({topic:document.querySelector('#topic').value,question:document.querySelector('#question').value,context:document.querySelector('#context').value,max_rounds:Number(document.querySelector('#rounds').value)})}); const data=await response.json(); if(!response.ok) throw new Error(data.detail||'无法创建辩论'); debateId=data.debate_id; await stream(); } catch(error) { showError(error.message); start.disabled=false; pause.disabled=true; setStatus('等待重新开始。'); } });
+    pause.addEventListener('click', async () => { if(!debateId) return; const action=paused?'resume':'pause'; await fetch(`/api/debates/${debateId}/${action}`,{method:'POST'}); paused=!paused; pause.textContent=paused?'继续辩论':'暂停辩论'; setStatus(paused?'正在暂停…':'辩论继续进行…'); });
+  </script>
+</body>
+</html>

@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "crewai-debate"
+version = "0.1.0"
+description = "A bounded, structured CrewAI debate application."
+requires-python = ">=3.10"
+dependencies = [
+  "crewai>=0.86.0,<2.0.0",
+  "pydantic>=2.7,<3.0",
+  "python-dotenv>=1.0,<2.0",
+  "fastapi>=0.115,<1.0",
+  "uvicorn[standard]>=0.30,<1.0",
+]
+
+[project.scripts]
+crewai-debate = "debate_app.main:main"
+crewai-debate-web = "web.server:run"
+
+
+[tool.setuptools.packages.find]
+include = ["debate_app*", "web*"]
+
+[tool.setuptools.package-data]
+web = ["*.html"]
+
